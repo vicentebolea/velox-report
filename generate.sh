@@ -1,8 +1,19 @@
 #!/bin/bash
 
 set -x 
-ssh raven 'bash -s' < ./hadoop-tasks-formater.sh > results.csv
+source ./VARS.sh
 
-./create_report.sh results.csv report.pdf
+OUTPUT=report.pdf
 
-evince report.pdf
+remote_script=`cat ./grep-remote-files.in |
+  sed "s/;NODES_ARGS;/$NODES_ARGS/g" |
+  sed "s|;LOGS_DIR;|$LOGS_DIR|g"`
+
+echo "remote_script"
+
+
+ssh $MASTER 'bash -s' <<<"$remote_script" > results.csv
+
+./create_report.sh results.csv $OUTPUT
+
+evince $OUTPUT
