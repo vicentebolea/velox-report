@@ -1,5 +1,6 @@
 require(ggplot2)
 require(scales)
+require(dplyr)
 
 ## Variables to be set
 FONT_SIZE_X=12
@@ -25,3 +26,16 @@ p <- ggplot() +
   
 
 ggsave(file=args[1], plot=p, width=15, height=15)
+
+df %>%
+  filter(diff > 100) %>%
+  ggplot(aes(x= diff, xmin=100)) + 
+    geom_histogram(aes(y=..density..), breaks=seq(100,150,5), col="red", fill="green", alpha = .2) + 
+    geom_density(color="blue", size=3, alpha=0.4) +
+    scale_x_continuous(breaks=seq(100,150,5)) +
+    theme(text=  element_text(size=FONT_SIZE_X)) + 
+		labs(title="Histogram for Task Exec Time") +
+    labs(x="Time", y="Count") -> p
+
+ggsave(file=args[2], plot=p, width=15, height=15)
+
