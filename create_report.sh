@@ -2,8 +2,8 @@
 
 INPUT=$1
 OUTPUT=$2
-PLOT_PATH=./plot.png
-HIST_PATH=./hist.png
+PLOT_PATH=$3
+HIST_PATH=$4
 
 STATS=`< $INPUT Rscript ./plot_tasks.R $PLOT_PATH $HIST_PATH`
 
@@ -25,5 +25,3 @@ ${STATS}
 ![Time series plot]($PLOT_PATH)" 
 
 pandoc -s -o $OUTPUT <<<"$template"
-
-rm -f $PLOT_PATH $HIST_PATH

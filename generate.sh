@@ -3,17 +3,17 @@
 set -x 
 source ./VARS.sh
 
-OUTPUT=report.pdf
+[ -z $BASE ] && BASE=runs
+
+WORKDIR=$BASE/`date +%s`
+[ -e $WORKDIR ] || mkdir -p $WORKDIR
 
 remote_script=`cat ./grep-remote-files.in |
   sed "s/;NODES_ARGS;/$NODES_ARGS/g" |
   sed "s|;LOGS_DIR;|$LOGS_DIR|g"`
 
-echo "remote_script"
+ssh $MASTER 'bash -s' <<<"$remote_script" > $WORKDIR/results.csv
 
+./create_report.sh $WORKDIR/results.csv $WORKDIR/report.pdf $WORKDIR/plot.png $WORKDIR/hist.png
 
-ssh $MASTER 'bash -s' <<<"$remote_script" > results.csv
-
-./create_report.sh results.csv $OUTPUT
-
-evince $OUTPUT
+evince $WORKDIR/report.pdf
