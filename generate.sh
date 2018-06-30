@@ -3,14 +3,12 @@
 set -x 
 source ./VARS.sh
 
-[ -z $BASE ] && BASE=runs
+OUTPUTDIR=${OUTPUTDIR:=runs}
 
 WORKDIR=$BASE/`date +%s`
-[ -e $WORKDIR ] || mkdir -p $WORKDIR
+mkdir -p $WORKDIR
 
-remote_script=`cat ./grep-remote-files.in |
-  sed "s/;NODES_ARGS;/$NODES_ARGS/g" |
-  sed "s|;LOGS_DIR;|$LOGS_DIR|g"`
+remote_script=$(< ./grep-remote-files.in sed 's|@\(NODES_ARGS\|LOGS_DIR\)@|$\1|g')
 
 ssh $MASTER 'bash -s' <<<"$remote_script" > $WORKDIR/results.csv
 
