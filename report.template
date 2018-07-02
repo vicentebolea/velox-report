@@ -1,13 +1,13 @@
 # VELOXDFS REPORT
 ## STATS
 
-$STATS
+@STATS@
 
 ## CHARTS 
 # Tasks Histogram
 
-![Time series plot]($HIST_PATH)
+![Time series plot](@HIST_PATH@)
 
 # Per Task Time series
 
-![Time series plot]($PLOT_PATH)
+![Time series plot](@PLOT_PATH@)
