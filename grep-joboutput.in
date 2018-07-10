@@ -1,0 +1,4 @@
+#!/bin/bash
+
+echo "BLOCK_SIZE:$(velox_get_config filesystem.block)\n"
+cat ~/last-output.log
