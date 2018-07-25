@@ -1,0 +1,7 @@
+#!/bin/bash
+
+source ~/.bash_independent > /dev/null
+echo "BLOCK_SIZE $(~/sandbox/bin/velox_get_config filesystem.block)"
+echo "SPECULATIVE $(grep 'speculative' -n1 -r ~/opt/hadoop-2.7.3/etc/* | grep -Po '<value>\K\w*')"
+echo "DFS $(grep 'fs.defaultFS' -n1 -r ~/opt/hadoop-2.7.3/etc/hadoop/core-site.xml | grep -Po '<value>\K\w*')"
+echo "ALPHA $(~/sandbox/bin/velox_get_config addons.alpha)"

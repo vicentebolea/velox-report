@@ -1,4 +1,5 @@
 #!/bin/bash
+cd "$(dirname $0)"
 
 INPUT=$1
 OUTPUT=$2

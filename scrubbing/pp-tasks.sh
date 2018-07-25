@@ -1,7 +1,12 @@
+#!/bin/bash
+cd "$(dirname $0)"
 
+JOB_FILE="$1/last-mr-output.out"
+TASKS_FILE="$1/tasks.csv"
+JOB_NAME=$(grep -Po 'Running job: job_\K\d+_\d+' $JOB_FILE)
 
-JOB_FILE=$1
-TASKS_FILE=$(dirname $JOB_FILE)/results.csv
+# Remove other jobs records
+sed -n -i.bak "/${JOB_NAME}\|task_name/p" $TASKS_FILE 
 
 > ./task-tmp.csv
 
