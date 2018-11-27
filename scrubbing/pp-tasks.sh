@@ -15,7 +15,7 @@ paste -d ',' $TASKS_FILE <(echo type; grep -Po 'task_\d+_\d+_\K\w' $TASKS_FILE) 
 
 
 # Adding block_size
-output=$(paste -d ',' ./task-tmp.csv  <(echo block_size; grep -Po ' len: \K\d+' $JOB_FILE; echo 'NA'))
+output=$(paste -d ',' ./task-tmp.csv  <(echo block_size; grep -Po ', \d+, \K\d+$' $JOB_FILE; echo 'NA'))
 
 #cat ./task-tmp.csv
 Rscript normalize_time.R <<<"$output" > ./task-tmp.csv

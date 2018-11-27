@@ -8,7 +8,7 @@ fi
 echo "Using WORKDIR $WORKDIR"
 
 # Get files
-bash scraping/grep_remote_files.bash $WORKDIR
+bash scraping/fetch-remote-files.bash $WORKDIR
 
 # Get first visualization
 bash visualizing/create_report.sh $WORKDIR/tasks.csv $WORKDIR/report.pdf $WORKDIR/plot.png $WORKDIR/hist.png
