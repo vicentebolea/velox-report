@@ -2,7 +2,7 @@
 cd "$(dirname $0)"
 source VARS
 
-read -r -d '' RUNNER_SRC <<'EOF'
+read -r -d '' RUNNER_SRC <<END
 #!/bin/env bash
 source ~/.bash_independent > /dev/null
 
@@ -12,7 +12,7 @@ sed -i 's/"min_block_size" : [0-9.]*/"min_block_size" : @MIN_BLOCK_SIZE@/g'  ~/.
 sed -i 's/"lean_input_split" : "[0-9.]*"/"lean_input_split" : "@LEAN_INPUT_SPLIT@"/g'  ~/.eclipse.json
 sed -i 's/"block_scheduler" : "[a-zA-Z_]*"/"block_scheduler" : "@SCHEDULER@"/g'  ~/.eclipse.json
 timeout 3000 bash ~/run_exp.sh @LAUNCHER@
-EOF 
+END
 
 ALPHA=(0)
 MIN_BLOCK_SIZE=(167772161) 

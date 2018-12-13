@@ -41,7 +41,7 @@ function fetch-last-tasks-table() {
 }
 # }}}
 # fetch-remote-files {{{
-read -r -d '' FETCH_JOBOUTPUT <<'EOF'
+read -r -d '' FETCH_JOBOUTPUT <<END
 #!/bin/bash
 
 source ~/.bash_independent > /dev/null
@@ -55,8 +55,7 @@ echo "INPUTFORMAT $(curl -s "http://localhost:19888/ws/v1/history/mapreduce/jobs
 echo "SPECULATIVE $(curl -s "http://localhost:19888/ws/v1/history/mapreduce/jobs/$JOBID/conf" | jq -r ' .conf.property[] | select(.name == "mapreduce.map.speculative").value')"
 echo "SCHEDULER $(~/sandbox/bin/velox_get_config addons.block_scheduler)"
 echo "INPUTSPLIT $(~/sandbox/bin/velox_get_config addons.lean_input_split)"
-EOF
-
+END
 function fetch-remote-files() {
   # Get tasks
   fetch-last-tasks-table > $WORKDIR/tasks.csv
