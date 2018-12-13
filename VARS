@@ -1,0 +1,7 @@
+NODES_ARGS="raven[01-39] -x raven20"
+LOGS_DIR="/scratch/vicente/yarn"
+MASTER="raven"
+OUTPUTDIR="/home/vicente/Dropbox/exps/runs/input"
+JOBS_FILE="/home/vicente/Dropbox/00_courses/thesis/data/jobs.csv"
+TASKS_FILE="/home/vicente/Dropbox/00_courses/thesis/data/tasks.csv"
+JOBHISTORY_PORT=19888

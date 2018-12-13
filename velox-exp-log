@@ -1,0 +1,34 @@
+#!/bin/bash
+cd "$(dirname $0)"
+source VARS
+set -x
+
+JOBS=`./velox-exp-get-jobid $1`
+
+if [ -z $2 ]; then
+  WORKDIR=$(mktemp -d)
+else
+  WORKDIR=$2
+fi
+
+for JOBID in ${JOBS[@]}; do
+  bash ./velox-exp-scrap $WORKDIR $JOBID
+
+  head $WORKDIR/jobs.csv
+
+  head $WORKDIR/tasks-clean.csv
+
+  # initialize job file
+  if [ ! -f $JOBS_FILE ]; then
+    echo "job_id,job_exec_time,block_size,dfs,speculative,io,alpha,min_block_size,nodes,application,scheduler,tags" > $JOBS_FILE
+  fi
+
+  if [ ! -f $TASKS_FILE ]; then
+    echo "task_name,start_time,end_time,type,block_size,diff,experiment" > $TASKS_FILE 
+  fi
+
+  cat $WORKDIR/jobs.csv >> $JOBS_FILE
+  tail -n +2 $WORKDIR/tasks-clean.csv >> $TASKS_FILE
+done
+
+set +x

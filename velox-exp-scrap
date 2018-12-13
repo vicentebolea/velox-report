@@ -1,0 +1,154 @@
+#!/bin/bash
+
+# Initialize {{{
+cd "$(dirname $0)"
+
+source VARS
+
+if [ -z $1 ]; then
+  WORKDIR=$(mktemp -d)
+else
+  WORKDIR=$1
+fi
+JOBID=$2
+
+if [ -z $2 ]; then
+  JOBID=`bash velox-exp-get-jobid`
+fi
+
+echo "Using WORKDIR $WORKDIR"
+# }}}
+# fetch-last-tasks {{{
+function fetch-last-tasks-table() {
+  if [ -z MASTER -o -z PORT ]; then
+    echo "MASTER or PORT variable not specified at the VARS file"
+    exit 123
+  fi
+
+  local PREFIX="http://$MASTER:$JOBHISTORY_PORT/ws/v1/history/mapreduce"
+
+  # Get last Application master syslog
+  local FILEPATH=`curl -s "$PREFIX/jobs/$JOBID/jobattempts" | jq -r '.jobAttempts.jobAttempt[].logsLink'`
+  local FILEPATH="${FILEPATH}/syslog?start=0"
+  local INPUT=`curl -s $FILEPATH 2>/dev/null`
+
+  # Compute tasks CSV table
+  echo 'task_name, start_time, end_time'
+  join -1 8 -2 8 -t ' ' <(sort -k 8 <(grep 'SCHEDULED to RUNNING' <<<"$INPUT")) <(sort -k 8 <(grep 'RUNNING to SUCCEEDED' <<<"$INPUT")) | \
+    cut -d ' ' -f 1,3,16 |   \
+    sed 's/,[0-9]\{3\}//g' | \
+    tr ' ' ','
+}
+# }}}
+# fetch-remote-files {{{
+read -r -d '' FETCH_JOBOUTPUT <<'EOF'
+#!/bin/bash
+
+source ~/.bash_independent > /dev/null
+echo "BLOCK_SIZE $(~/sandbox/bin/velox_get_config filesystem.block)"
+echo "DFS $(grep 'fs.defaultFS' -n1 -r ~/hadoop-etc/core-site.xml | grep -Po '<value>\K\w*')"
+echo "ALPHA $(~/sandbox/bin/velox_get_config addons.alpha)"
+echo "MIN_BLOCK_SIZE $(~/sandbox/bin/velox_get_config addons.min_block_size)"
+echo "APPLICATION $(curl -s "http://localhost:19888/ws/v1/history/mapreduce/jobs/$JOBID" | jq -r '.job.name')"
+echo "NODES $(wc -l ~/hadoop-etc/slaves | cut -d ' ' -f1)"
+echo "INPUTFORMAT $(curl -s "http://localhost:19888/ws/v1/history/mapreduce/jobs/$JOBID/conf" | jq -r ' .conf.property[] | select(.name == "mapreduce.job.inputformat.class").value')"
+echo "SPECULATIVE $(curl -s "http://localhost:19888/ws/v1/history/mapreduce/jobs/$JOBID/conf" | jq -r ' .conf.property[] | select(.name == "mapreduce.map.speculative").value')"
+echo "SCHEDULER $(~/sandbox/bin/velox_get_config addons.block_scheduler)"
+echo "INPUTSPLIT $(~/sandbox/bin/velox_get_config addons.lean_input_split)"
+EOF
+
+function fetch-remote-files() {
+  # Get tasks
+  fetch-last-tasks-table > $WORKDIR/tasks.csv
+
+  # Get info
+  ssh $MASTER JOBID=$JOBID 'bash -s' <<<"$FETCH_JOBOUTPUT"  > $WORKDIR/info.out
+
+  # Get output job
+  scp $MASTER:~/last-mr-output.out $WORKDIR &> /dev/null
+}
+# }}}
+# extract-job-stats {{{
+function extract-job-stats() {
+local OUT_FILE="$WORKDIR/last-mr-output.out"
+local INFO_FILE="$WORKDIR/info.out"
+
+local JOB_NAME=$(grep -Po 'job_\K\d+_\d+' <<<"$JOBID")
+local JOB_EXEC_TIME=$(curl -s "http://$MASTER:19888/ws/v1/history/mapreduce/jobs/$JOBID" | jq -r '.job.finishTime - .job.submitTime')
+local BLOCK_SIZE=$(grep -Po '^BLOCK_SIZE \K\w*' $INFO_FILE)
+local DFS=$(grep -Po 'DFS \K\w*' $INFO_FILE)
+local ALPHA=$(grep -Po 'ALPHA \K[0-9.]*' $INFO_FILE)
+local SPECULATIVE=$(grep -Po 'SPECULATIVE \K\w*' $INFO_FILE)
+local MIN_BLOCK_SIZE=$(grep -Po 'MIN_BLOCK_SIZE \K\w*' $INFO_FILE)
+local APPLICATION=$(grep -Po 'APPLICATION \K\w*' $INFO_FILE)
+local INPUTFORMAT=$(grep -Po 'INPUTFORMAT \K[a-zA-Z0-9\.]*' $INFO_FILE)
+local NODES=$(grep -Po 'NODES \K\w*' $INFO_FILE)
+local SCHEDULER=$(grep -Po 'SCHEDULER \K\w*' $INFO_FILE)
+local INPUTSPLIT=$(grep -Po 'INPUTSPLIT \K[0-9\.]*' $INFO_FILE)
+
+local ZERO_IO=NO
+
+echo $JOB_NAME,$JOB_EXEC_TIME,$BLOCK_SIZE,$DFS,$SPECULATIVE,$ZERO_IO,$ALPHA,$MIN_BLOCK_SIZE,$INPUTSPLIT,$NODES,$APPLICATION,$SCHEDULER,$INPUTFORMAT
+}
+# }}}
+# preprocess-tasks-files {{{
+function preprocess-tasks-files() {
+  local JOB_FILE="$WORKDIR/last-mr-output.out"
+  local TASKS_FILE="$WORKDIR/tasks.csv"
+  local JOB_NAME=$(grep -Po 'job_\K\d+_\d+' <<<"$JOBID")
+
+  # Remove other jobs records
+  sed -n -i.bak "/${JOB_NAME}\|task_name/p" $TASKS_FILE 
+
+  > ./task-tmp.csv
+
+  # Adding type
+  paste -d ',' $TASKS_FILE <(echo type; grep -Po 'task_\d+_\d+_\K\w' $TASKS_FILE) > ./task-tmp.csv
+
+
+  # Adding block_size
+  output=$(paste -d ',' ./task-tmp.csv  <(echo block_size; grep -Po ', \d+, \K\d+$' $JOB_FILE; echo 'NA'))
+
+  #cat ./task-tmp.csv
+  Rscript src/normalize_time.R <<<"$output" > ./task-tmp.csv
+  Rscript src/add_job_id.R < ./task-tmp.csv
+
+  rm -f ./task-tmp.csv
+}
+# }}}
+# create-report {{{
+function create-report() {
+  local INPUT=$1
+  local OUTPUT=$2
+  local PLOT_PATH=$3
+  local HIST_PATH=$4
+
+  local STATS=`< $INPUT Rscript src/plot_tasks.R $PLOT_PATH $HIST_PATH`
+
+  local STATS=`echo -e "$STATS" | sed 's/^[ ]\+//g;s/[ ]$//g' | sed 's/1st Qu./1stQu./g;s/3rd Qu./3rdQu/g' | sed 's/[ ]\+/ /g' | sed $'s/Max.$/Max.\\\n--|--|--|--|--|--/g' | sed 's/$/\\\n/g' | tr ' ' '|'`
+
+local RULES="
+PLOT_PATH=$PLOT_PATH
+HIST_PATH=$HIST_PATH
+STATS=\"`echo -n $STATS`\"
+"
+
+  echo "$RULES" > rules
+
+  templater rules < src/report.template | pandoc -s -o $OUTPUT 
+
+  rm rules
+}
+# }}}
+
+# Get files
+fetch-remote-files $WORKDIR $JOBID
+
+# Clean jobs data
+extract-job-stats $WORKDIR > $WORKDIR/jobs.csv
+
+# Clean tasks data
+preprocess-tasks-files $WORKDIR > $WORKDIR/tasks-clean.csv
+
+# Get first visualization
+create-report $WORKDIR/tasks.csv $WORKDIR/report.pdf $WORKDIR/plot.png $WORKDIR/hist.png

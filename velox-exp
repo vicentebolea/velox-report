@@ -1,0 +1,30 @@
+#!/bin/bash
+
+HELP="
+velox-exp: Velox Utility to run and record experiments using Velox and Hadoop
+
+USAGE: velox-exp <ACTION> [ARGS]
+
+ACTIONS:
+
+    run workload1 workload2...,  run and log the workloads 
+    log [N],                     log last N experiments
+    drylog,                      log last N experiments
+    help,                        print this
+
+
+WORKLOAD FILE EXAMPLE:
+ALPHA=(0)
+MIN_BLOCK_SIZE=(167772161) 
+LEAN_INPUT_SPLIT=(0.00 0.10 0.20 0.30 0.40 0.50 0.60 0.70 0.80 0.90 1.00) 
+LAUNCHER=run_awc.sh
+SCHEDULER=scheduler_lean
+"
+
+case "$1" in
+  run) shift; ./velox-exp-run "$@"; exit;;
+  log) ./velox-exp-log $1; exit;;
+  drylog) ./velox-exp-scrap; exit;;
+  help) echo "$HELP"; exit;;
+  *) echo "NO ACTION GIVEN"; echo "$HELP"; exit;;
+esac

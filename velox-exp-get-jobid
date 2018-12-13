@@ -1,0 +1,9 @@
+#!/bin/bash
+cd "$(dirname $0)"
+
+source VARS
+
+LAST_N=${1:-1}
+
+JOBID=`curl -s "http://$MASTER:19888/ws/v1/history/mapreduce/jobs"  | jq -r '.jobs.job[] | select(.name != "grep-sort")' | jq -sr ".[-${LAST_N}:]" | jq -r '.[].id'`
+echo $JOBID
