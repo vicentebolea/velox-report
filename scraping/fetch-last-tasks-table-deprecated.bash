@@ -1,6 +1,0 @@
-#!/bin/env bash
-INPUT=`pdsh -N -w @NODES_ARGS@ 'FOLDER=$(ls -t1 @LOGS_DIR@/logs/userlogs/ | head -n1); find @LOGS_DIR@/logs/userlogs/$FOLDER -name "*000001" -exec cat {}/syslog \\;'`
-#INPUT=`sh web-scrap.sh $1`
-
-echo 'task_name, start_time, end_time'
-join -1 8 -2 8 -t ' ' <(sort -k 8 <(grep 'SCHEDULED to RUNNING' <<<"$INPUT")) <(sort -k 8 <(grep 'RUNNING to SUCCEEDED' <<<"$INPUT")) | cut -d ' ' -f 1,3,16 | sed 's/,[0-9]\\{3\\}//g' | tr ' ' ','

@@ -1,10 +1,10 @@
 {
   "name": "velox-report",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Tools to create statistical PDF reports of Velox MR jobs.",
   "install": "install -b velox-report.sh ${PREFIX:-/usr/local}/bin/velox-report",
-  "files": [ "VARS.sh", "plot_tasks.R", "report.template" ]
-  "scripts": [ "velox-report.sh", "create_report.sh" ]
+  "files": [ "VARS.sh", "src/add_job_id.R" , "src/normalize_time.R", "src/plot_tasks.R", "src/report.template", "src/velox-stats-lib.R" ]
+  "scripts": [ "velox-exp.sh", "velox-exp-get-jobid", "velox-exp-log", "velox-exp-run", "velox-exp-scrap" ]
   "dependencies": {
     "vicentebolea/bash-templater" : "0.0.2"
   }

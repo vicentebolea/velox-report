@@ -1,0 +1,46 @@
+#!/bin/bash
+cd "$(dirname $0)"
+source VARS
+
+read -r -d '' RUNNER_SRC <<'EOF'
+#!/bin/env bash
+source ~/.bash_independent > /dev/null
+
+
+sed -i 's/"alpha" : "[0-9.]*"/"alpha" : "@ALPHA@"/g'  ~/.eclipse.json
+sed -i 's/"min_block_size" : [0-9.]*/"min_block_size" : @MIN_BLOCK_SIZE@/g'  ~/.eclipse.json
+sed -i 's/"lean_input_split" : "[0-9.]*"/"lean_input_split" : "@LEAN_INPUT_SPLIT@"/g'  ~/.eclipse.json
+sed -i 's/"block_scheduler" : "[a-zA-Z_]*"/"block_scheduler" : "@SCHEDULER@"/g'  ~/.eclipse.json
+timeout 3000 bash ~/run_exp.sh @LAUNCHER@
+EOF 
+
+ALPHA=(0)
+MIN_BLOCK_SIZE=(167772161) 
+LEAN_INPUT_SPLIT=(0.00)
+
+for workload in "${@}"; do
+
+  source $workload
+ 
+  set -x
+  for i in ${ALPHA[*]}; do
+    for j in ${MIN_BLOCK_SIZE[*]}; do
+      for k in ${LEAN_INPUT_SPLIT[*]}; do
+        APPMANAGERFILE="$RUNNER_SRC"
+        APPMANAGERFILE=$(sed "s/@LAUNCHER@/$LAUNCHER/g" <<<"$APPMANAGERFILE")
+        APPMANAGERFILE=$(sed "s/@SCHEDULER@/$SCHEDULER/g" <<<"$APPMANAGERFILE")
+        APPMANAGERFILE=$(sed "s/@ALPHA@/$i/g" <<<"$APPMANAGERFILE")
+        APPMANAGERFILE=$(sed "s/@MIN_BLOCK_SIZE@/$j/g" <<<"$APPMANAGERFILE")
+        APPMANAGERFILE=$(sed "s/@LEAN_INPUT_SPLIT@/$k/g" <<<"$APPMANAGERFILE")
+        echo "$APPMANAGERFILE"
+        ssh $MASTER 'bash -s' <<<"$APPMANAGERFILE" 
+        sleep 10
+        bash velox-exp-log $NUMJOBS
+        sleep 3
+      done
+    done
+  done
+  set +x
+
+shift
+done 

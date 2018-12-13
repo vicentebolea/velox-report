@@ -5,5 +5,5 @@
 
 ## How to run
 ```sh
-$ ./generate.sh
+$ ./run.sh workloads*
 ```
