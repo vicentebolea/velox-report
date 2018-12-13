@@ -2,7 +2,7 @@
 cd "$(dirname $0)"
 source VARS
 
-read -r -d '' RUNNER_SRC <<END
+read -r -d '' RUNNER_SRC <<'END'
 #!/bin/env bash
 source ~/.bash_independent > /dev/null
 
