@@ -11,6 +11,7 @@ else
   WORKDIR=$1
 fi
 JOBID=$2
+PORT=$JOBHISTORY_PORT
 
 if [ -z $2 ]; then
   JOBID=`bash velox-exp-get-jobid`
@@ -50,10 +51,10 @@ echo "BLOCK_SIZE $(~/sandbox/bin/velox_get_config filesystem.block)"
 echo "DFS $(grep 'fs.defaultFS' -n1 -r ~/hadoop-etc/core-site.xml | grep -Po '<value>\K\w*')"
 echo "ALPHA $(~/sandbox/bin/velox_get_config addons.alpha)"
 echo "MIN_BLOCK_SIZE $(~/sandbox/bin/velox_get_config addons.min_block_size)"
-echo "APPLICATION $(curl -s "http://localhost:19888/ws/v1/history/mapreduce/jobs/$JOBID" | jq -r '.job.name')"
+echo "APPLICATION $(curl -s "http://localhost:${PORT}/ws/v1/history/mapreduce/jobs/$JOBID" | jq -r '.job.name')"
 echo "NODES $(wc -l ~/hadoop-etc/slaves | cut -d ' ' -f1)"
-echo "INPUTFORMAT $(curl -s "http://localhost:19888/ws/v1/history/mapreduce/jobs/$JOBID/conf" | jq -r ' .conf.property[] | select(.name == "mapreduce.job.inputformat.class").value')"
-echo "SPECULATIVE $(curl -s "http://localhost:19888/ws/v1/history/mapreduce/jobs/$JOBID/conf" | jq -r ' .conf.property[] | select(.name == "mapreduce.map.speculative").value')"
+echo "INPUTFORMAT $(curl -s "http://localhost:${PORT}/ws/v1/history/mapreduce/jobs/$JOBID/conf" | jq -r ' .conf.property[] | select(.name == "mapreduce.job.inputformat.class").value')"
+echo "SPECULATIVE $(curl -s "http://localhost:${PORT}/ws/v1/history/mapreduce/jobs/$JOBID/conf" | jq -r ' .conf.property[] | select(.name == "mapreduce.map.speculative").value')"
 echo "SCHEDULER $(~/sandbox/bin/velox_get_config addons.block_scheduler)"
 echo "INPUTSPLIT $(~/sandbox/bin/velox_get_config addons.lean_input_split)"
 END
@@ -63,7 +64,7 @@ function fetch-remote-files() {
   fetch-last-tasks-table > $WORKDIR/tasks.csv
 
   # Get info
-  ssh $MASTER JOBID=$JOBID 'bash -s' <<<"$FETCH_JOBOUTPUT"  > $WORKDIR/info.out
+  ssh $MASTER JOBID=$JOBID PORT=$JOBHISTORY_PORT 'bash -s' <<<"$FETCH_JOBOUTPUT"  > $WORKDIR/info.out
 
   # Get output job
   scp $MASTER:~/last-mr-output.out $WORKDIR &> /dev/null
@@ -75,7 +76,7 @@ local OUT_FILE="$WORKDIR/last-mr-output.out"
 local INFO_FILE="$WORKDIR/info.out"
 
 local JOB_NAME=$(grep -Po 'job_\K\d+_\d+' <<<"$JOBID")
-local JOB_EXEC_TIME=$(curl -s "http://$MASTER:19888/ws/v1/history/mapreduce/jobs/$JOBID" | jq -r '.job.finishTime - .job.submitTime')
+local JOB_EXEC_TIME=$(curl -s "http://$MASTER:${PORT}/ws/v1/history/mapreduce/jobs/$JOBID" | jq -r '.job.finishTime - .job.submitTime')
 local BLOCK_SIZE=$(grep -Po '^BLOCK_SIZE \K\w*' $INFO_FILE)
 local DFS=$(grep -Po 'DFS \K\w*' $INFO_FILE)
 local ALPHA=$(grep -Po 'ALPHA \K[0-9.]*' $INFO_FILE)
@@ -86,10 +87,11 @@ local INPUTFORMAT=$(grep -Po 'INPUTFORMAT \K[a-zA-Z0-9\.]*' $INFO_FILE)
 local NODES=$(grep -Po 'NODES \K\w*' $INFO_FILE)
 local SCHEDULER=$(grep -Po 'SCHEDULER \K\w*' $INFO_FILE)
 local INPUTSPLIT=$(grep -Po 'INPUTSPLIT \K[0-9\.]*' $INFO_FILE)
-
+local ZK_OVERHEAD=$(curl -s "http://$MASTER:${PORT}/ws/v1/history/mapreduce/jobs/$JOBID/counters" | jq -r '.jobCounters.counterGroup[].counter[] | select(.name == "ZOOKEEPER_OVERHEAD_MILISECONDS") | .totalCounterValue')
+local READ_OVERHEAD=$(curl -s "http://$MASTER:${PORT}/ws/v1/history/mapreduce/jobs/$JOBID/counters" | jq -r '.jobCounters.counterGroup[].counter[] | select(.name == "READING_OVERHEAD_MILISECONDS") | .totalCounterValue')
 local ZERO_IO=NO
 
-echo $JOB_NAME,$JOB_EXEC_TIME,$BLOCK_SIZE,$DFS,$SPECULATIVE,$ZERO_IO,$ALPHA,$MIN_BLOCK_SIZE,$INPUTSPLIT,$NODES,$APPLICATION,$SCHEDULER,$INPUTFORMAT
+echo $JOB_NAME,$JOB_EXEC_TIME,$BLOCK_SIZE,$DFS,$SPECULATIVE,$ZERO_IO,$ALPHA,$MIN_BLOCK_SIZE,$INPUTSPLIT,$NODES,$APPLICATION,$SCHEDULER,$INPUTFORMAT,$READ_OVERHEAD,$ZK_OVERHEAD
 }
 # }}}
 # preprocess-tasks-files {{{
@@ -101,20 +103,35 @@ function preprocess-tasks-files() {
   # Remove other jobs records
   sed -n -i.bak "/${JOB_NAME}\|task_name/p" $TASKS_FILE 
 
-  > ./task-tmp.csv
+  > $WORKDIR/task-tmp.csv
 
   # Adding type
-  paste -d ',' $TASKS_FILE <(echo type; grep -Po 'task_\d+_\d+_\K\w' $TASKS_FILE) > ./task-tmp.csv
+  paste -d ',' $TASKS_FILE <(echo type; grep -Po 'task_\d+_\d+_\K\w' $TASKS_FILE) > $WORKDIR/task-tmp.csv
 
+  for i in `cat $WORKDIR/tasks.csv`; do
+    task=`cut -d "," -f1 <<<"$i"`
+    if [[ $task =~ ^task_[_0-9mr]+$ ]]; then
+      curl -s "http://$MASTER:$JOBHISTORY_PORT/ws/v1/history/mapreduce/jobs/$JOBID/tasks/$task/counters" | \
+				jq -r '.jobTaskCounters.taskCounterGroup[].counter[] | select(.name == "BYTES_READ") | .value' | head -n1
+    fi
+  done > $WORKDIR/block_file
+
+  for i in `cat $WORKDIR/tasks.csv`; do
+    task=`cut -d "," -f1 <<<"$i"`
+    if [[ $task =~ ^task_[_0-9mr]+$ ]]; then
+      curl -s "http://$MASTER:$JOBHISTORY_PORT/ws/v1/history/mapreduce/jobs/$JOBID/tasks/$task/counters" | \
+				jq -r '.jobTaskCounters.taskCounterGroup[].counter[] | select(.name == "ZOOKEEPER_OVERHEAD_MILISECONDS") | .value' | head -n1
+    fi
+  done > $WORKDIR/zk_file
 
   # Adding block_size
-  output=$(paste -d ',' ./task-tmp.csv  <(echo block_size; grep -Po ', \d+, \K\d+$' $JOB_FILE; echo 'NA'))
+  output=$(paste -d ',' $WORKDIR/task-tmp.csv  <(echo block_size; cat $WORKDIR/block_file))
 
   #cat ./task-tmp.csv
-  Rscript src/normalize_time.R <<<"$output" > ./task-tmp.csv
-  Rscript src/add_job_id.R < ./task-tmp.csv
+  Rscript src/normalize_time.R <<<"$output" > $WORKDIR/task-tmp.csv
+  paste -d ',' <(Rscript src/add_job_id.R < $WORKDIR/task-tmp.csv)  <(echo zookeeper_overhead; cat $WORKDIR/zk_file)
 
-  rm -f ./task-tmp.csv
+  rm -f $WORKDIR/task-tmp.csv
 }
 # }}}
 # create-report {{{
@@ -153,3 +170,6 @@ preprocess-tasks-files $WORKDIR > $WORKDIR/tasks-clean.csv
 
 # Get first visualization
 create-report $WORKDIR/tasks.csv $WORKDIR/report.pdf $WORKDIR/plot.png $WORKDIR/hist.png
+
+head $WORKDIR/jobs.csv
+head $WORKDIR/tasks-clean.csv

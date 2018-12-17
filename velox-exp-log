@@ -24,7 +24,7 @@ for JOBID in ${JOBS[@]}; do
   fi
 
   if [ ! -f $TASKS_FILE ]; then
-    echo "task_name,start_time,end_time,type,block_size,diff,experiment" > $TASKS_FILE 
+    echo "task_name,start_time,end_time,type,block_size,diff,experiment,zookeeper_overhead" > $TASKS_FILE 
   fi
 
   cat $WORKDIR/jobs.csv >> $JOBS_FILE
